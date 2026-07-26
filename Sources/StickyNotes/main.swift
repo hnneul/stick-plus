@@ -289,6 +289,18 @@ final class StickerWindow: NSWindow {
             }
         }
     }
+
+    /// Put a normal sticker behind the other windows on the desktop when the
+    /// Stick app loses focus. Pinned stickers intentionally stay floating.
+    func moveBehindOtherWindows() {
+        guard !isPinnedWindow else { return }
+        orderBack(nil)
+        resignKey()
+    }
+
+    private var isPinnedWindow: Bool {
+        level == .floating
+    }
 }
 
 // NSHostingView subclass that lets clicks reach the SwiftUI gestures even
@@ -617,6 +629,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        installEditMenu()
+
         // Menu bar
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let b = statusItem.button {
@@ -661,6 +675,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let y = max(8, d.maxY - p.height)
             panel.setFrameOrigin(NSPoint(x: x, y: y))
         })
+        observers.append(nc.addObserver(forName: NSApplication.didResignActiveNotification, object: NSApp, queue: .main) { [weak self] _ in
+            self?.sendStickersToBack()
+        })
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -669,6 +686,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func menuNew() { newSticker() }
     @objc func menuQuit() { NSApp.terminate(nil) }
+
+    /// The accessory app has no default application menu. Without an Edit
+    /// menu, AppKit does not route the standard Command-X/C/V actions from a
+    /// TextEditor through the responder chain.
+    private func installEditMenu() {
+        let mainMenu = NSMenu()
+        let appMenuItem = NSMenuItem(title: "Stick", action: nil, keyEquivalent: "")
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Quit Stick", action: #selector(menuQuit), keyEquivalent: "q").target = self
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+        NSApp.mainMenu = mainMenu
+    }
 
     @objc func toggleDashboard() {
         if let d = dashboard, d.isVisible {
@@ -746,6 +785,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let s = state.sticker(id) else { return }
         spawnWindow(for: s)
         stickerWindows[id]?.makeKey()
+    }
+
+    private func sendStickersToBack() {
+        for window in stickerWindows.values {
+            window.moveBehindOtherWindows()
+        }
     }
 
     private func deleteSticker(_ id: UUID) {

@@ -351,12 +351,12 @@ struct DashboardView: View {
             HStack {
                 Text("Stick")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary)
+                    .foregroundColor(state.fontColor)
                 Spacer()
                 Button(action: onHide) {
                     Image(systemName: "eye.slash")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.primary.opacity(0.7))
+                        .foregroundColor(state.fontColor.opacity(0.7))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .background(Capsule().fill(Color.primary.opacity(0.08)))
@@ -390,7 +390,7 @@ struct DashboardView: View {
                     Text("No notes yet.\nTap + New to add one.")
                         .multilineTextAlignment(.center)
                         .font(.system(size: 12, design: .rounded))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(state.fontColor.opacity(0.65))
                     Spacer()
                 }
                 .frame(maxWidth: .infinity)
@@ -400,6 +400,7 @@ struct DashboardView: View {
                         ForEach(Array(state.stickers.enumerated()), id: \.element.id) { idx, s in
                             StickerRow(
                                 s: s,
+                                state: state,
                                 onFocus: { onFocus(s.id) },
                                 onDelete: { onDelete(s.id) },
                                 onHover: { isHover in
@@ -433,10 +434,10 @@ struct DashboardView: View {
             HStack(spacing: 6) {
                 Image(systemName: "folder")
                     .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(state.fontColor.opacity(0.65))
                 Text(Store.shared.url.path)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(state.fontColor.opacity(0.65))
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(Store.shared.url.path)
@@ -462,6 +463,7 @@ struct DashboardView: View {
 
 struct StickerRow: View {
     let s: StickerData
+    @ObservedObject var state: AppState
     let onFocus: () -> Void
     let onDelete: () -> Void
     var onHover: (Bool) -> Void = { _ in }
@@ -478,12 +480,12 @@ struct StickerRow: View {
             Text(preview)
                 .lineLimit(1)
                 .font(.system(size: 12, design: .rounded))
-                .foregroundColor(.primary)
+                .foregroundColor(state.fontColor)
             Spacer()
             Button(action: onDelete) {
                 Image(systemName: "trash")
                     .font(.system(size: 10))
-                    .foregroundColor(.primary)
+                    .foregroundColor(state.fontColor)
                     .padding(4)
             }
             .buttonStyle(.plain)
@@ -519,7 +521,7 @@ struct SettingsPanel: View {
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                     Spacer()
                 }
-                .foregroundColor(.secondary)
+                .foregroundColor(state.fontColor.opacity(0.7))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -558,7 +560,7 @@ struct SettingsPanel: View {
     private func sectionLabel(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.system(size: 9, weight: .semibold, design: .rounded))
-            .foregroundColor(.secondary.opacity(0.8))
+            .foregroundColor(state.fontColor.opacity(0.55))
             .tracking(0.5)
             .padding(.top, 2)
     }
@@ -567,13 +569,13 @@ struct SettingsPanel: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 10))
-                .foregroundColor(.secondary)
+                .foregroundColor(state.fontColor.opacity(0.6))
                 .frame(width: 12)
             ColorPicker(label, selection: selection, supportsOpacity: true)
                 .labelsHidden()
             Text(label)
                 .font(.system(size: 10, design: .rounded))
-                .foregroundColor(.secondary)
+                .foregroundColor(state.fontColor.opacity(0.65))
             Spacer()
         }
     }
@@ -582,7 +584,7 @@ struct SettingsPanel: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 10))
-                .foregroundColor(.secondary)
+                .foregroundColor(state.fontColor.opacity(0.6))
                 .frame(width: 12)
             Slider(value: Binding(
                 get: { Double(binding.wrappedValue) },
@@ -770,10 +772,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func closeStickerWindow(_ id: UUID) {
+        // Respect an explicitly hidden dashboard. Closing a note should not
+        // unexpectedly bring the menu window back after the user clicked the
+        // eye button.
+        let dashboardWasVisible = dashboard?.isVisible == true
         if let w = stickerWindows.removeValue(forKey: id) {
             w.orderOut(nil)
         }
-        showDashboard()
+        if dashboardWasVisible {
+            showDashboard()
+        }
     }
 
     private func focusSticker(_ id: UUID) {
